@@ -32,3 +32,19 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return res.status(401).json({ error: "invalid_token" });
   }
 }
+
+/**
+ * Role gate: use after requireAuth.
+ * 403 unless the authenticated user has one of the given roles.
+ */
+export function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+    return next();
+  };
+}

@@ -4,7 +4,7 @@ export type User = {
   id: number;
   name: string | null;
   email: string;
-  role: string;
+  role: string; // "student" | "parent" | "admin" | "teacher"
 };
 
 export type Book = {
@@ -16,6 +16,61 @@ export type Book = {
   createdAt: string;
   uploadedBy?: { id: number; name: string | null } | null;
 };
+
+// ---------------- Academics (role dashboards) ----------------
+
+export type CatalogItem = { id: string; name: string };
+export type Subject = { id: string; name: string; emoji: string; score?: number | null };
+
+export type Catalog = {
+  stages: CatalogItem[];
+  terms: CatalogItem[];
+  subjectsByStage: Record<string, Subject[]>;
+};
+
+export type StudentProfile = { stage: string | null; term: string | null } | null;
+
+export type AttemptRow = {
+  id: number;
+  examTitle: string;
+  subjectId: string | null;
+  subjectName: string | null;
+  subjectEmoji: string | null;
+  score: number | null;
+  date: string;
+};
+
+export type ExamTemplate = {
+  id: number;
+  title: string;
+  subjectId: string | null;
+  subjectName: string | null;
+  subjectEmoji: string;
+  createdAt: string;
+};
+
+export type StudentOverview = {
+  user: User;
+  profile: StudentProfile;
+  subjects: Subject[];
+  attempts: AttemptRow[];
+  templates: ExamTemplate[];
+};
+
+export type Recommendation = { subjectId: string; level: "strong" | "good" | "weak" | "none"; text: string };
+
+export type Child = {
+  id: number;
+  name: string | null;
+  email: string;
+  profile: { stage: string | null; stageName: string; term: string | null; termName: string };
+  subjects: Subject[];
+  average: number | null;
+  results: AttemptRow[];
+  recommendations: Recommendation[];
+};
+
+export type AdminStats = { users: number; students: number; parents: number; books: number; exams: number };
 
 /**
  * Small fetch wrapper.

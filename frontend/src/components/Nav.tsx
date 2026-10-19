@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { api, MOBILE_TOKEN_KEY, User } from "../lib/api";
 
-/** Shared glass navbar — shows the user chip when logged in. */
+/** Shared glass navbar — links adapt to the user's role. */
 export default function Nav() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -25,6 +25,8 @@ export default function Nav() {
     router.replace("/login");
   }
 
+  const role = user?.role;
+
   return (
     <nav className="nav">
       <Link className="brand" href="/">
@@ -33,8 +35,8 @@ export default function Nav() {
       </Link>
       <div className="links">
         <Link className="link" href="/dashboard">لوحة التحكم</Link>
-        <Link className="link" href="/library">المكتبة</Link>
-        <Link className="link" href="/upload">رفع كتاب</Link>
+        {role !== "parent" && <Link className="link" href="/library">المكتبة</Link>}
+        {role === "admin" && <Link className="link" href="/upload">رفع كتاب</Link>}
         {user ? (
           <>
             <span className="link" style={{ color: "var(--primary-dark)", fontWeight: 700, cursor: "default" }}>
@@ -45,7 +47,10 @@ export default function Nav() {
             </button>
           </>
         ) : (
-          <Link className="btn" style={{ padding: "7px 16px", fontSize: 14 }} href="/login">دخول</Link>
+          <>
+            <Link className="link" href="/login-qr">QR</Link>
+            <Link className="btn" style={{ padding: "7px 16px", fontSize: 14 }} href="/login">دخول</Link>
+          </>
         )}
       </div>
     </nav>

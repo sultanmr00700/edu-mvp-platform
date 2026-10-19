@@ -3,6 +3,12 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { api, MOBILE_TOKEN_KEY, User } from "../lib/api";
 
+const DEMO_ACCOUNTS = [
+  { label: "🎓 طالب", email: "student@edu.local", password: "student1234" },
+  { label: "👨‍👩‍👦 ولي أمر", email: "parent@edu.local", password: "parent1234" },
+  { label: "🛠️ أدمن", email: "admin@edu.local", password: "admin1234" },
+];
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -84,6 +90,25 @@ export default function LoginPage() {
         <p className="muted" style={{ marginTop: 16, textAlign: "center" }}>
           أو جرّب <Link href="/login-qr" style={{ color: "var(--primary-dark)", fontWeight: 700 }}>الدخول بـ QR</Link>
         </p>
+
+        <div className="demo-accounts">
+          <p className="muted" style={{ marginBottom: 8 }}>حسابات تجريبية (اضغط لتعبئة الفورم):</p>
+          <div className="row" style={{ justifyContent: "center" }}>
+            {DEMO_ACCOUNTS.map((acc) => (
+              <button
+                key={acc.email}
+                type="button"
+                className="chip chip-clickable"
+                onClick={() => {
+                  setEmail(acc.email);
+                  setPassword(acc.password);
+                }}
+              >
+                {acc.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </main>
     </div>
   );

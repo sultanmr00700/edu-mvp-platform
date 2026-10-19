@@ -49,6 +49,10 @@ model StudentProfile {
   id        Int    @id @default(autoincrement())
   user      User   @relation(fields: [userId], references: [id])
   userId    Int    @unique
+  // Education stage: "primary" | "prep" | "secondary"
+  stage     String?
+  // Academic term: "term1" | "term2"
+  term      String?
   grade     String?
   class     String?
   avatarUrl String?

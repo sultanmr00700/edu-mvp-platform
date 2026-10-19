@@ -1,9 +1,18 @@
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import Nav from "../components/Nav";
+import StudentDashboard from "../components/dashboards/StudentDashboard";
+import ParentDashboard from "../components/dashboards/ParentDashboard";
+import AdminDashboard from "../components/dashboards/AdminDashboard";
 import { api, User } from "../lib/api";
+import { ROLE_LABEL } from "../lib/labels";
 
+/**
+ * Role-aware dashboard: renders the interface that matches the user's role.
+ *   student -> المرحلة/الفصل/المواد/الاختبارات/نماذج الامتحانات
+ *   parent  -> نتائج الأبناء + التوصيات
+ *   admin   -> إحصائيات + إدارة الكتب
+ */
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -16,51 +25,23 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  if (loading) {
-    return (
-      <>
-        <Nav />
-        <div className="container"><p className="muted">جاري التحميل...</p></div>
-      </>
-    );
-  }
-
   return (
     <>
       <Nav />
       <div className="container">
-        <div className="card fade-up">
-          <h1>لوحة التحكم 👋</h1>
-          {user && (
-            <>
-              <p style={{ fontWeight: 700 }}>{user.name || "بدون اسم"} — <span className="muted" style={{ fontWeight: 400 }}>{user.email}</span></p>
-              <p style={{ marginTop: 6 }}>
-                <span className="badge confirmed"><span className="dot" />الدور: {user.role}</span>
-              </p>
-            </>
-          )}
-        </div>
+        {loading && <p className="muted">جاري التحميل...</p>}
 
-        <div className="grid">
-          <div className="card book-card fade-up d1">
-            <div className="icon-tile tile-indigo">📚</div>
-            <Link href="/library">المكتبة</Link>
-            <p className="muted">كل الكتب المرفوعة — اقرأ أي كتاب في قارئ مدمج.</p>
-            <Link className="btn secondary" href="/library">افتح المكتبة</Link>
+        {!loading && user?.role === "student" && <StudentDashboard userName={user.name} />}
+        {!loading && user?.role === "parent" && <ParentDashboard userName={user.name} />}
+        {!loading && user?.role === "admin" && <AdminDashboard userName={user.name} />}
+
+        {!loading && user && !["student", "parent", "admin"].includes(user.role) && (
+          <div className="card fade-up" style={{ textAlign: "center", padding: 44 }}>
+            <div className="icon-tile tile-indigo" style={{ margin: "0 auto 14px" }}>🚧</div>
+            <h1 style={{ fontSize: 22 }}>واجهة {ROLE_LABEL[user.role] ?? user.role} قريبًا</h1>
+            <p className="muted">إحنا شغالين عليها — استخدم باقي صفحات الموقع meanwhile.</p>
           </div>
-          <div className="card book-card fade-up d2">
-            <div className="icon-tile tile-amber">⬆️</div>
-            <Link href="/upload">رفع كتاب</Link>
-            <p className="muted">ارفع ملف PDF جديد وأضفه للمكتبة فورًا.</p>
-            <Link className="btn" href="/upload">ارفع الآن</Link>
-          </div>
-          <div className="card book-card fade-up d3">
-            <div className="icon-tile tile-emerald">🔐</div>
-            <Link href="/login-qr">الدخول بـ QR</Link>
-            <p className="muted">جرّب تدفق مسح الـ QR من الموبايل.</p>
-            <Link className="btn secondary" href="/login-qr">جرّب الآن</Link>
-          </div>
-        </div>
+        )}
       </div>
     </>
   );

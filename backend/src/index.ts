@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import multer from "multer";
 import authRoutes, { meRouter } from "./routes/auth";
 import booksRoutes, { UPLOAD_DIR } from "./routes/books";
+import academicsRoutes from "./routes/academics";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -23,6 +24,9 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api", meRouter); // GET /api/me
 app.use("/api/books", booksRoutes);
+// Academics: GET /api/academics/catalog, PUT /api/profile,
+// GET /api/student/overview, GET /api/parent/children, GET /api/admin/stats
+app.use("/api", academicsRoutes);
 
 // Serve uploaded PDFs (the reader page embeds these URLs in an <iframe>)
 app.use("/uploads", express.static(UPLOAD_DIR));

@@ -69,25 +69,63 @@ ME=$(curl -s "$BASE_URL/api/me" -H "Cookie: $WEB_COOKIE")
 echo "  $ME"
 [ -n "$(json_field user.id <<<"$ME")" ] && ok "me works with cookie" || fail "me"
 
-step "10) Upload PDF"
+step "10) Upload PDF as student -> 403 (admin-only)"
 node "$(dirname "$0")/make-fixture-pdf.mjs" .tmp/sample.pdf >/dev/null
-UP=$(curl -s -X POST "$BASE_URL/api/books/upload" \
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/books/upload" \
   -H "Authorization: Bearer $MOBILE_JWT" \
-  -F "file=@.tmp/sample.pdf;type=application/pdf" -F "title=???????? ????????????????")
+  -F "file=@.tmp/sample.pdf;type=application/pdf" -F "title=ShouldFail")
+[ "$CODE" = "403" ] && ok "student upload blocked with 403" || fail "student upload (got $CODE, expected 403)"
+
+step "11) Upload PDF as admin"
+ADMIN_EMAIL="admin-smoke-$(date +%s)@t.com"
+curl -s -X POST "$BASE_URL/api/auth/register" -H "Content-Type: application/json" \
+  -d "{\"name\":\"admin\",\"email\":\"$ADMIN_EMAIL\",\"password\":\"$PASS\",\"role\":\"admin\"}" >/dev/null
+ADMIN_LOGIN=$(curl -s -X POST "$BASE_URL/api/auth/login" -H "Content-Type: application/json" \
+  -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$PASS\"}")
+ADMIN_JWT=$(json_field token <<<"$ADMIN_LOGIN")
+UP=$(curl -s -X POST "$BASE_URL/api/books/upload" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -F "file=@.tmp/sample.pdf;type=application/pdf" -F "title=Book (test)")
 BOOK_ID=$(json_field book.id <<<"$UP")
 PDF_URL=$(json_field book.pdfUrl <<<"$UP")
 echo "  $UP"
-[ -n "$BOOK_ID" ] && ok "book #$BOOK_ID created" || fail "upload"
+[ -n "$BOOK_ID" ] && ok "book #$BOOK_ID created by admin" || fail "upload (admin)"
 
-step "11) Library list"
+step "12) Library list"
 LIST=$(curl -s "$BASE_URL/api/books" -H "Cookie: $WEB_COOKIE")
 echo "$LIST" | grep -q "\"id\":$BOOK_ID" && ok "book #$BOOK_ID present in /api/books" || fail "library list"
 
-step "12) Book details + PDF serving"
+step "13) Book details + PDF serving"
 DETAIL=$(curl -s "$BASE_URL/api/books/$BOOK_ID" -H "Cookie: $WEB_COOKIE")
 echo "$DETAIL" | grep -q "\"id\":$BOOK_ID" && ok "details" || fail "details"
 CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$PDF_URL")
 [ "$CODE" = "200" ] && ok "PDF served at $PDF_URL (200)" || fail "PDF serving (got $CODE)"
+
+step "14) Parent dashboard: /api/parent/children (seeded demo family)"
+PARENT_LOGIN=$(curl -s -X POST "$BASE_URL/api/auth/login" -H "Content-Type: application/json" \
+  -d '{"email":"parent@edu.local","password":"parent1234"}')
+PARENT_JWT=$(json_field token <<<"$PARENT_LOGIN")
+if [ -z "$PARENT_JWT" ]; then
+  echo "  [SKIP] demo family not seeded (run: npx prisma db seed in backend/)"
+else
+  CHILDREN=$(curl -s "$BASE_URL/api/parent/children" -H "Authorization: Bearer $PARENT_JWT")
+  echo "  $CHILDREN"
+  echo "$CHILDREN" | grep -q '"children"' && echo "$CHILDREN" | grep -q '"recommendations"' \
+    && ok "parent sees children + recommendations" || fail "parent/children"
+fi
+
+step "15) Student dashboard: /api/student/overview (seeded demo family)"
+STU_LOGIN=$(curl -s -X POST "$BASE_URL/api/auth/login" -H "Content-Type: application/json" \
+  -d '{"email":"student@edu.local","password":"student1234"}')
+STU_JWT=$(json_field token <<<"$STU_LOGIN")
+if [ -z "$STU_JWT" ]; then
+  echo "  [SKIP] demo family not seeded (run: npx prisma db seed in backend/)"
+else
+  OVERVIEW=$(curl -s "$BASE_URL/api/student/overview" -H "Authorization: Bearer $STU_JWT")
+  echo "  $OVERVIEW"
+  echo "$OVERVIEW" | grep -q '"subjects"' && echo "$OVERVIEW" | grep -q '"templates"' \
+    && ok "student sees subjects + exam templates" || fail "student/overview"
+fi
 
 rm -f "$HEADERS"
 echo

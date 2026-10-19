@@ -75,26 +75,62 @@ $me = curl.exe -s "$BaseUrl/api/me" -H "Cookie: $WebCookie"
 Write-Host "  $me"
 if ($me -match '"id"') { Ok "me works with cookie" } else { Fail "me" }
 
-Step "10) Upload PDF"
+Step "10) Upload PDF as student -> 403 (admin-only)"
 node "$(Split-Path -Parent $MyInvocation.MyCommand.Path)\make-fixture-pdf.mjs" ".tmp/sample.pdf" | Out-Null
-$up = curl.exe -s -X POST "$BaseUrl/api/books/upload" `
+$forbidden = curl.exe -s -o NUL -w "%{http_code}" -X POST "$BaseUrl/api/books/upload" `
   -H "Authorization: Bearer $MobileJwt" `
+  -F "file=@.tmp/sample.pdf;type=application/pdf" -F "title=ShouldFail"
+if ($forbidden -eq "403") { Ok "student upload blocked with 403" } else { Fail "student upload (got $forbidden, expected 403)" }
+
+Step "11) Upload PDF as admin"
+$AdminEmail = "admin-smoke-$([int](Get-Date -UFormat %s))@t.com"
+$adminRegBody = JsonFile ('{"name":"admin","email":"' + $AdminEmail + '","password":"' + $Pass + '","role":"admin"}')
+$null = curl.exe -s -X POST "$BaseUrl/api/auth/register" -H "Content-Type: application/json" -d "@$adminRegBody"
+$adminLoginBody = JsonFile ('{"email":"' + $AdminEmail + '","password":"' + $Pass + '"}')
+$adminLogin = curl.exe -s -X POST "$BaseUrl/api/auth/login" -H "Content-Type: application/json" -d "@$adminLoginBody"
+$AdminJwt = ($adminLogin | ConvertFrom-Json).token
+$up = curl.exe -s -X POST "$BaseUrl/api/books/upload" `
+  -H "Authorization: Bearer $AdminJwt" `
   -F "file=@.tmp/sample.pdf;type=application/pdf" -F "title=Book (test)"
 $upObj = $up | ConvertFrom-Json
 $BookId = $upObj.book.id
 $PdfUrl = $upObj.book.pdfUrl
 Write-Host "  $up"
-if ($BookId) { Ok "book #$BookId created" } else { Fail "upload" }
+if ($BookId) { Ok "book #$BookId created by admin" } else { Fail "upload (admin)" }
 
-Step "11) Library list"
+Step "12) Library list"
 $list = curl.exe -s "$BaseUrl/api/books" -H "Cookie: $WebCookie"
 if ($list -match "`"id`":$BookId") { Ok "book #$BookId present in /api/books" } else { Fail "library list" }
 
-Step "12) Book details + PDF serving"
+Step "13) Book details + PDF serving"
 $detail = curl.exe -s "$BaseUrl/api/books/$BookId" -H "Cookie: $WebCookie"
 if ($detail -match "`"id`":$BookId") { Ok "details" } else { Fail "details" }
 $code = curl.exe -s -o NUL -w "%{http_code}" "$BaseUrl$PdfUrl"
 if ($code -eq "200") { Ok "PDF served at $PdfUrl (200)" } else { Fail "PDF serving (got $code)" }
+
+Step "14) Parent dashboard: /api/parent/children (seeded demo family)"
+$parentLoginBody = JsonFile ('{"email":"parent@edu.local","password":"parent1234"}')
+$parentLogin = curl.exe -s -X POST "$BaseUrl/api/auth/login" -H "Content-Type: application/json" -d "@$parentLoginBody"
+$ParentJwt = ($parentLogin | ConvertFrom-Json).token
+if (-not $ParentJwt) {
+  Write-Host "  [SKIP] demo family not seeded (run: npx prisma db seed in backend/)" -ForegroundColor Yellow
+} else {
+  $children = curl.exe -s "$BaseUrl/api/parent/children" -H "Authorization: Bearer $ParentJwt"
+  Write-Host "  $children"
+  if ($children -match '"children"' -and $children -match '"recommendations"') { Ok "parent sees children + recommendations" } else { Fail "parent/children" }
+}
+
+Step "15) Student dashboard: /api/student/overview (seeded demo family)"
+$stuLoginBody = JsonFile ('{"email":"student@edu.local","password":"student1234"}')
+$stuLogin = curl.exe -s -X POST "$BaseUrl/api/auth/login" -H "Content-Type: application/json" -d "@$stuLoginBody"
+$StudentJwt = ($stuLogin | ConvertFrom-Json).token
+if (-not $StudentJwt) {
+  Write-Host "  [SKIP] demo family not seeded (run: npx prisma db seed in backend/)" -ForegroundColor Yellow
+} else {
+  $overview = curl.exe -s "$BaseUrl/api/student/overview" -H "Authorization: Bearer $StudentJwt"
+  Write-Host "  $overview"
+  if ($overview -match '"subjects"' -and $overview -match '"templates"') { Ok "student sees subjects + exam templates" } else { Fail "student/overview" }
+}
 
 Write-Host ""
 if ($Fails -eq 0) {

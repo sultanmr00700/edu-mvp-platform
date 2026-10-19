@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
 import prisma from "../prismaClient";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireRole } from "../middleware/auth";
 import { enqueuePdfJob } from "../workers/pdfWorker";
 
 /**
@@ -41,8 +41,9 @@ const router = Router();
 
 // ---------------------------------------------------------------------------
 // POST /api/books/upload — multipart/form-data: file (+ optional title)
+// Admin-only: book management is restricted to admins (الإدارة).
 // ---------------------------------------------------------------------------
-router.post("/upload", requireAuth, (req: Request, res: Response, next: NextFunction) => {
+router.post("/upload", requireAuth, requireRole("admin"), (req: Request, res: Response, next: NextFunction) => {
   upload.single("file")(req, res, (err) => {
     if (err) return next(err);
     return createBook(req, res, next);
@@ -120,9 +121,9 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/books/:id/process — enqueue PDF text-extraction (worker skeleton).
-// Returns 503 when Redis/Bull queue is unavailable (MVP-friendly).
+// Admin-only. Returns 503 when Redis/Bull queue is unavailable (MVP-friendly).
 // ---------------------------------------------------------------------------
-router.post("/:id/process", requireAuth, async (req: Request, res: Response) => {
+router.post("/:id/process", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) {

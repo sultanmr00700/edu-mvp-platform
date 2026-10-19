@@ -3,7 +3,14 @@
 MVP منصة ويب تعليمية: تسجيل دخول بالإيميل أو **QR**، رفع كتب **PDF**، قراءتها داخل المتصفح،
 وتهيئة worker لاستخراج النص وتوليد الامتحانات (لاحقًا).
 
-**الأدوار:** student · parent · admin · teacher (لاحقًا)
+**الأدوار وواجهات كل دور:**
+
+| الدور | واجهة `/dashboard` | مميزات |
+|---|---|---|
+| 🎓 **طالب** | المرحلة التعليمية + الفصل + المواد + الاختبارات + نماذج الامتحانات | يكمّل ملفه الدراسي، يتابع نتائجه، يقرأ كتب المكتبة |
+| 👨‍👩‍👦 **ولي أمر** | نتائج أبناءه + توصيات المتابعة | متوسط عام + نتيجة كل مادة + توصيات ذكية حسب الدرجات |
+| 🛠️ **أدمن** | إحصائيات + إدارة الكتب | **رفع الكتب للأدمن فقط** (403 لغيره) |
+| 👨‍🏫 مدرس | قريبًا | — |
 
 > الواجهة بالعربي (RTL) — الكود بالإنجليزي. التخزين المحلي في `backend/uploads`
 > (يُستبدل لاحقًا بـ Supabase/S3 بدون تغيير الـ API).
@@ -38,10 +45,15 @@ edu-mvp-platform/
 | GET  | `/api/auth/qr/status?token=` | `pending` \| `confirmed` (+user) \| `expired` |
 | POST | `/api/auth/logout` | مسح كوكي الجلسة |
 | GET  | `/api/me` | المستخدم الحالي (كوكي أو Bearer) |
-| POST | `/api/books/upload` | رفع PDF (multipart: `file` + `title` اختياري) |
+| GET  | `/api/academics/catalog` | المراحل والفترات والمواد (لواجهات الطلاب) |
+| PUT  | `/api/profile` | **طالب** يحفظ مرحلته وفصله الدراسي (upsert) |
+| GET  | `/api/student/overview` | **طالب**: الملف + المواد + آخر الاختبارات + نماذج الامتحانات |
+| GET  | `/api/parent/children` | **ولي أمر**: الأبناء + النتائج + التوصيات |
+| GET  | `/api/admin/stats` | **أدمن**: عدد المستخدمين/الطلاب/الكتب/النماذج |
+| POST | `/api/books/upload` | رفع PDF (multipart: `file` + `title`) — **أدمن فقط** |
 | GET  | `/api/books` | قائمة الكتب |
 | GET  | `/api/books/:id` | تفاصيل كتاب |
-| POST | `/api/books/:id/process` | يبدأ استخراج النص عبر الـ worker (يحتاج Redis) |
+| POST | `/api/books/:id/process` | استخراج النص عبر الـ worker — **أدمن فقط** (يحتاج Redis) |
 | GET  | `/uploads/:file` | عرض ملف الـPDF نفسه |
 
 **ملاحظات أمنية (MVP):** JWT لمدة ساعة · كلمات السر bcrypt · QR token one-time وصلاحية ٢ دقيقة ·
@@ -74,6 +86,7 @@ createdb edudb   # أو استخدم أي Postgres عندك
 cd backend
 npm install
 npx prisma migrate dev --name init      # يطبّق migration ويولّد الـ client
+npx prisma db seed                      # (اختياري) يزرع الحسابات التجريبية الثلاثة
 npm run dev                             # http://localhost:4000
 
 # (اختياري) Worker منفصل في تيرمنال تاني:
@@ -104,6 +117,20 @@ cd backend && npm install && npx prisma migrate dev --name init && npm run dev
 ---
 
 ## 🧪 الاختبار (curl)
+
+### حسابات تجريبية (بعد تشغيل الـ seed)
+
+```bash
+cd backend && npx prisma db seed    # يزرع العائلة التجريبية + نماذج امتحانات + نتائج
+```
+
+| الحساب | البريد | كلمة السر | يشوف |
+|---|---|---|---|
+| طالب | `student@edu.local` | `student1234` | المرحلة/الفصل/المواد/الاختبارات/النماذج |
+| ولي أمر | `parent@edu.local` | `parent1234` | نتائج الطالب + توصيات المتابعة |
+| أدمن | `admin@edu.local` | `admin1234` | الإحصائيات + رفع الكتب (حكر للأدمن) |
+
+> الصفحة فيها أزرار تعبئة سريعة للحسابات دي في `/login`.
 
 بعد التشغيل:
 
@@ -140,12 +167,20 @@ curl -i -X POST http://localhost:4000/api/auth/qr/confirm \
 # /api/me بالكوكي اللي رجع
 curl http://localhost:4000/api/me -H "Cookie: token=<WEB_JWT>"
 
-# رفع PDF (ولّد ملف تجريبي الأول)
+# رفع PDF (أدمن فقط — ولّد ملف تجريبي الأول وادخل بحساب الأدمن)
 node scripts/make-fixture-pdf.mjs .tmp/sample.pdf
+curl -X POST http://localhost:4000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@edu.local","password":"admin1234"}'     # ← ADMIN_JWT
 curl -X POST http://localhost:4000/api/books/upload \
-  -H "Authorization: Bearer <MOBILE_JWT>" \
+  -H "Authorization: Bearer <ADMIN_JWT>" \
   -F "file=@.tmp/sample.pdf;type=application/pdf" -F "title=MyBook"
 # → { "book": { "id": 1, "pdfUrl": "/uploads/....pdf", ... } }
+# (غير الأدمن ياخد 403 forbidden)
+
+# واجهة الطالب / ولي الأمر (بحسابات الـ seed)
+curl http://localhost:4000/api/student/overview -H "Authorization: Bearer <STUDENT_JWT>"
+curl http://localhost:4000/api/parent/children  -H "Authorization: Bearer <PARENT_JWT>"
 
 # المكتبة + تفاصيل الكتاب + عرض الـPDF
 curl http://localhost:4000/api/books -H "Cookie: token=<WEB_JWT>"
@@ -191,6 +226,6 @@ cd backend && npm run worker    # يشغل المستهلك
 ## 🚀 خطوات تالية (خارج MVP)
 
 - تبديل التخزين المحلي بـ Supabase/S3.
-- توليد الامتحانات من النص المستخرج (LLM أو قواعد).
-- ربط حسابات أولياء الطلاب (`ParentLink`) ودور المدرّس.
-- تحسين الأمان: rate limiting، تقييد الرفع للأدوار المناسبة، كوكي `Secure` على HTTPS.
+- توليد الامتحانات من النص المستخرج (LLM أو قواعد) + صفحة حل اختبار حقيقية.
+- دور المدرّس: إنشاء نماذج الامتحانات ومتابعة فصله.
+- تحسين الأمان: rate limiting، كوكي `Secure` على HTTPS.
