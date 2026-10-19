@@ -1,0 +1,193 @@
+// prisma/schema.prisma
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  student
+  parent
+  admin
+  teacher
+}
+
+enum QuestionType {
+  mcq
+  tf
+  fill_blank
+  short_answer
+}
+
+model User {
+  id           Int               @id @default(autoincrement())
+  email        String            @unique
+  passwordHash String?
+  name         String?
+  role         UserRole
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  studentProfile StudentProfile?
+  uploadedBooks  Book[]          @relation("UploadedBooks")
+  examsCreated   Exam[]          @relation("ExamCreator")
+  attempts       Attempt[]
+  notifications  Notification[]
+  ParentLinksAsParent ParentLink[] @relation("ParentLinksParent")
+  ParentLinksAsStudent ParentLink[] @relation("ParentLinksStudent")
+  qrSessions QrSession[]
+}
+
+model StudentProfile {
+  id        Int    @id @default(autoincrement())
+  user      User   @relation(fields: [userId], references: [id])
+  userId    Int    @unique
+  grade     String?
+  class     String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+}
+
+model ParentLink {
+  id             Int  @id @default(autoincrement())
+  parentUser     User @relation("ParentLinksParent", fields: [parentUserId], references: [id])
+  parentUserId   Int
+  studentUser    User @relation("ParentLinksStudent", fields: [studentUserId], references: [id])
+  studentUserId  Int
+  createdAt      DateTime @default(now())
+
+  @@unique([parentUserId, studentUserId])
+}
+
+model Book {
+  id            Int       @id @default(autoincrement())
+  title         String
+  author        String?
+  pdfUrl        String
+  storageKey    String?
+  uploadedBy    User?     @relation("UploadedBooks", fields: [uploadedById], references: [id])
+  uploadedById  Int?
+  language      String    @default("ar")
+  textExtracted Boolean   @default(false)
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+
+  chapters Chapter[]
+  questions Question[]   @relation("BookQuestions")
+}
+
+model Chapter {
+  id        Int     @id @default(autoincrement())
+  book      Book    @relation(fields: [bookId], references: [id])
+  bookId    Int
+  title     String?
+  startPage Int?
+  endPage   Int?
+  text      String?
+  sequence  Int     @default(0)
+  createdAt DateTime @default(now())
+
+  questions Question[]
+}
+
+model Question {
+  id           Int          @id @default(autoincrement())
+  chapter      Chapter?     @relation(fields: [chapterId], references: [id])
+  chapterId    Int?
+  sourceBook   Book?        @relation("BookQuestions", fields: [sourceBookId], references: [id])
+  sourceBookId Int?
+  type         QuestionType
+  prompt       String
+  correctAnswer String?
+  difficulty   Int          @default(1)
+  generated    Boolean      @default(true)
+  metadata     Json?
+  createdAt    DateTime     @default(now())
+
+  options QuestionOption[]
+  examQuestions ExamQuestion[]
+  attemptAnswers AttemptAnswer[]
+}
+
+model QuestionOption {
+  id         Int     @id @default(autoincrement())
+  question   Question @relation(fields: [questionId], references: [id])
+  questionId Int
+  optionText String
+  isCorrect  Boolean @default(false)
+  sequence   Int     @default(0)
+}
+
+model Exam {
+  id         Int     @id @default(autoincrement())
+  title      String
+  createdBy  User?   @relation("ExamCreator", fields: [createdById], references: [id])
+  createdById Int?
+  config     Json?
+  isTemplate Boolean @default(false)
+  createdAt  DateTime @default(now())
+
+  examQuestions ExamQuestion[]
+  attempts Attempt[]
+}
+
+model ExamQuestion {
+  id         Int @id @default(autoincrement())
+  exam       Exam @relation(fields: [examId], references: [id])
+  examId     Int
+  question   Question @relation(fields: [questionId], references: [id])
+  questionId Int
+  points     Int @default(1)
+  sequence   Int @default(0)
+}
+
+model Attempt {
+  id            Int @id @default(autoincrement())
+  exam          Exam? @relation(fields: [examId], references: [id])
+  examId        Int?
+  student       User  @relation(fields: [studentUserId], references: [id])
+  studentUserId Int
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+  score         Float?
+  metadata      Json?
+
+  attemptAnswers AttemptAnswer[]
+}
+
+model AttemptAnswer {
+  id               Int @id @default(autoincrement())
+  attempt          Attempt @relation(fields: [attemptId], references: [id])
+  attemptId        Int
+  question         Question? @relation(fields: [questionId], references: [id])
+  questionId       Int?
+  answerText       String?
+  selectedOptionId Int?
+  selectedOption   QuestionOption? @relation(fields: [selectedOptionId], references: [id])
+  isCorrect        Boolean?
+  timeSpentSeconds Int @default(0)
+}
+
+model Notification {
+  id        Int @id @default(autoincrement())
+  user      User @relation(fields: [userId], references: [id])
+  userId    Int
+  type      String?
+  payload   Json?
+  read      Boolean @default(false)
+  createdAt DateTime @default(now())
+}
+
+model QrSession {
+  id        Int @id @default(autoincrement())
+  token     String @unique
+  user      User? @relation(fields: [userId], references: [id])
+  userId    Int?
+  used      Boolean @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
