@@ -13,8 +13,8 @@ FAILS=0
 json_field() { node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const o=JSON.parse(d);const v=o['$1'];console.log(typeof v==='object'?JSON.stringify(v):v)}catch(e){console.log('')}})"; }
 
 step() { echo; echo "== $1 =="; }
-ok()   { echo "  ✔ $1"; }
-fail() { echo "  ✘ $1"; FAILS=$((FAILS+1)); }
+ok()   { echo "  ??? $1"; }
+fail() { echo "  ??? $1"; FAILS=$((FAILS+1)); }
 
 step "1) Health check"
 HEALTH=$(curl -s "$BASE_URL/api/health")
@@ -58,26 +58,32 @@ step "7) QR status now -> confirmed"
 STATUS=$(curl -s "$BASE_URL/api/auth/qr/status?token=$QR_TOKEN")
 [ "$(json_field status <<<"$STATUS")" = "confirmed" ] && ok "status=confirmed" || fail "status=confirmed"
 
-step "8) /api/me with the web cookie"
+step "8) QR confirm again -> rejected (one-time token)"
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/auth/qr/confirm" \
+  -H "Authorization: Bearer $MOBILE_JWT" -H "Content-Type: application/json" \
+  -d "{\"token\":\"$QR_TOKEN\"}")
+[ "$CODE" = "400" ] && ok "second confirm rejected with 400" || fail "second confirm (got $CODE)"
+
+step "9) /api/me with the web cookie"
 ME=$(curl -s "$BASE_URL/api/me" -H "Cookie: $WEB_COOKIE")
 echo "  $ME"
 [ -n "$(json_field user.id <<<"$ME")" ] && ok "me works with cookie" || fail "me"
 
-step "9) Upload PDF"
+step "10) Upload PDF"
 node "$(dirname "$0")/make-fixture-pdf.mjs" .tmp/sample.pdf >/dev/null
 UP=$(curl -s -X POST "$BASE_URL/api/books/upload" \
   -H "Authorization: Bearer $MOBILE_JWT" \
-  -F "file=@.tmp/sample.pdf;type=application/pdf" -F "title=كتاب الاختبار")
+  -F "file=@.tmp/sample.pdf;type=application/pdf" -F "title=???????? ????????????????")
 BOOK_ID=$(json_field book.id <<<"$UP")
 PDF_URL=$(json_field book.pdfUrl <<<"$UP")
 echo "  $UP"
 [ -n "$BOOK_ID" ] && ok "book #$BOOK_ID created" || fail "upload"
 
-step "10) Library list"
+step "11) Library list"
 LIST=$(curl -s "$BASE_URL/api/books" -H "Cookie: $WEB_COOKIE")
 echo "$LIST" | grep -q "\"id\":$BOOK_ID" && ok "book #$BOOK_ID present in /api/books" || fail "library list"
 
-step "11) Book details + PDF serving"
+step "12) Book details + PDF serving"
 DETAIL=$(curl -s "$BASE_URL/api/books/$BOOK_ID" -H "Cookie: $WEB_COOKIE")
 echo "$DETAIL" | grep -q "\"id\":$BOOK_ID" && ok "details" || fail "details"
 CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$PDF_URL")
@@ -86,8 +92,8 @@ CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$PDF_URL")
 rm -f "$HEADERS"
 echo
 if [ "$FAILS" -eq 0 ]; then
-  echo "ALL SMOKE TESTS PASSED ✅"
+  echo "ALL SMOKE TESTS PASSED ???"
 else
-  echo "SMOKE TESTS FAILED: $FAILS ❌"
+  echo "SMOKE TESTS FAILED: $FAILS ???"
   exit 1
 fi

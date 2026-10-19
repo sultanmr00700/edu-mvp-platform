@@ -64,12 +64,18 @@ Step "7) QR status now -> confirmed"
 $status = curl.exe -s "$BaseUrl/api/auth/qr/status?token=$QrToken" | ConvertFrom-Json
 if ($status.status -eq "confirmed") { Ok "status=confirmed" } else { Fail "status=confirmed (got $($status.status))" }
 
-Step "8) /api/me with the web cookie"
+Step "8) QR confirm again -> rejected (one-time token)"
+$dupBody = JsonFile ('{"token":"' + $QrToken + '"}')
+$dup = curl.exe -s -o NUL -w "%{http_code}" -X POST "$BaseUrl/api/auth/qr/confirm" `
+  -H "Authorization: Bearer $MobileJwt" -H "Content-Type: application/json" -d "@$dupBody"
+if ($dup -eq "400") { Ok "second confirm rejected with 400" } else { Fail "second confirm (got $dup)" }
+
+Step "9) /api/me with the web cookie"
 $me = curl.exe -s "$BaseUrl/api/me" -H "Cookie: $WebCookie"
 Write-Host "  $me"
 if ($me -match '"id"') { Ok "me works with cookie" } else { Fail "me" }
 
-Step "9) Upload PDF"
+Step "10) Upload PDF"
 node "$(Split-Path -Parent $MyInvocation.MyCommand.Path)\make-fixture-pdf.mjs" ".tmp/sample.pdf" | Out-Null
 $up = curl.exe -s -X POST "$BaseUrl/api/books/upload" `
   -H "Authorization: Bearer $MobileJwt" `
@@ -80,11 +86,11 @@ $PdfUrl = $upObj.book.pdfUrl
 Write-Host "  $up"
 if ($BookId) { Ok "book #$BookId created" } else { Fail "upload" }
 
-Step "10) Library list"
+Step "11) Library list"
 $list = curl.exe -s "$BaseUrl/api/books" -H "Cookie: $WebCookie"
 if ($list -match "`"id`":$BookId") { Ok "book #$BookId present in /api/books" } else { Fail "library list" }
 
-Step "11) Book details + PDF serving"
+Step "12) Book details + PDF serving"
 $detail = curl.exe -s "$BaseUrl/api/books/$BookId" -H "Cookie: $WebCookie"
 if ($detail -match "`"id`":$BookId") { Ok "details" } else { Fail "details" }
 $code = curl.exe -s -o NUL -w "%{http_code}" "$BaseUrl$PdfUrl"

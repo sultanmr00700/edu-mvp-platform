@@ -58,6 +58,7 @@ docker compose up -d
 - Frontend: http://localhost:3000
 - Backend:  http://localhost:4000/api/health
 - المigrations بتتطبّق تلقائيًا عند تشغيل الـ backend (`prisma migrate deploy`).
+- خدمة `worker` بتشتغل المستهلك بتاع طابور استخراج الـPDF (`npm run worker` محليًا).
 
 > ملف الرفع volume اسمه `uploads` — يفضل استخدام `docker compose down` بدون `-v` عشان الكتب تفضل موجودة.
 
@@ -96,6 +97,9 @@ cd backend && npm install && npx prisma migrate dev --name init && npm run dev
 
 > محليًا غيّر `DATABASE_URL` إلى `postgresql://postgres:postgres@localhost:5432/edudb`
 > و`REDIS_URL` إلى `redis://localhost:6379`.
+
+> ⚠️ **تنبيه:** الكونتينرات بتاخذ البورتات 3000/4000 — لو هتشغّل `npm run dev` محليًا،
+> وقّف كونتينرات backend/frontend الأول واستخدم `docker compose up -d db redis` بس.
 
 ---
 
