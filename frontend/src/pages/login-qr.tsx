@@ -1,48 +1,150 @@
-import React, { useEffect, useState } from 'react';
-import QRCode from 'react-qr-code';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import QRCode from "react-qr-code";
+import { useRouter } from "next/router";
+import { api, MOBILE_TOKEN_KEY } from "../lib/api";
 
-export default function LoginQRPage() {
+type Status = "pending" | "confirmed" | "expired" | "not_found";
+
+const POLL_MS = 1500;
+
+export default function LoginQrPage() {
+  const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
-  const [status, setStatus] = useState('pending');
-  useEffect(() => {
-    const createQr = async () => {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/qr/create`, { method: 'POST' });
-      const data = await res.json();
+  const [status, setStatus] = useState<Status>("pending");
+  const [error, setError] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(120);
+  const [confirming, setConfirming] = useState(false);
+  const tokenRef = useRef<string | null>(null);
+
+  const createQr = useCallback(async () => {
+    setError(null);
+    setStatus("pending");
+    setToken(null);
+    try {
+      const data = await api<{ token: string; expiresAt: string }>("/api/auth/qr/create", {
+        method: "POST",
+      });
       setToken(data.token);
-    };
-    createQr();
+      tokenRef.current = data.token;
+      setSecondsLeft(Math.max(0, Math.round((new Date(data.expiresAt).getTime() - Date.now()) / 1000)));
+    } catch {
+      setError("تعذر إنشاء الـ QR. اتأكد إن السيرفر شغال.");
+    }
   }, []);
 
   useEffect(() => {
-    let iv: any;
-    if (token) {
-      iv = setInterval(async () => {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/qr/status?token=${token}`);
-        const data = await res.json();
-        setStatus(data.status || 'pending');
-        if (data.status === 'confirmed') {
+    createQr();
+  }, [createQr]);
+
+  // Poll the status of the displayed QR token.
+  useEffect(() => {
+    if (!token) return;
+    const iv = setInterval(async () => {
+      try {
+        const data = await api<{ status: Status }>(`/api/auth/qr/status?token=${token}`);
+        setStatus(data.status);
+        if (data.status === "confirmed") {
           clearInterval(iv);
-          // handle success (set cookie / redirect)
-          alert('تم تسجيل الدخول بنجاح');
-          window.location.href = '/';
+          setTimeout(() => router.push("/dashboard"), 400);
         }
-      }, 1500);
-    }
+      } catch {
+        /* keep polling quietly */
+      }
+    }, POLL_MS);
     return () => clearInterval(iv);
-  }, [token]);
+  }, [token, router]);
+
+  // Countdown until the QR expires.
+  useEffect(() => {
+    if (!token || status !== "pending") return;
+    const iv = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearInterval(iv);
+          setStatus("expired");
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [token, status]);
+
+  // Simulated phone: confirm the QR with the mobile JWT saved on /login.
+  async function simulateMobileConfirm() {
+    if (!token) return;
+    const mobileToken = localStorage.getItem(MOBILE_TOKEN_KEY);
+    if (!mobileToken) {
+      setError("مفيش token موبايل محفوظ — سجّل دخول من صفحة /login الأول (أو استخدم curl زي الـ README).");
+      return;
+    }
+    setConfirming(true);
+    setError(null);
+    try {
+      await api("/api/auth/qr/confirm", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${mobileToken}` },
+        body: JSON.stringify({ token }),
+      });
+      setStatus("confirmed");
+      setTimeout(() => router.push("/dashboard"), 400);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? `التأكيد فشل: ${err.message}`
+          : "التأكيد فشل"
+      );
+    } finally {
+      setConfirming(false);
+    }
+  }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center' }}>
-        <h2>سجل دخول عن طريق المسح QR</h2>
-        {token ? (
-          <div style={{ background: 'white', padding: 16, display: 'inline-block' }}>
+    <div className="container" style={{ maxWidth: 520 }}>
+      <div className="card" style={{ textAlign: "center" }}>
+        <h1>الدخول بـ QR</h1>
+        <p className="muted">
+          افتح التطبيق على الموبايل (المسجّل دخول)، امسح الكود، ووافق على الدخول.
+        </p>
+
+        {error && <div className="error" style={{ textAlign: "right" }}>{error}</div>}
+
+        {token && status === "pending" && (
+          <div className="qr-box" style={{ margin: "12px auto" }}>
             <QRCode value={token} size={200} />
           </div>
-        ) : (
-          <p>جاري إنشاء QR...</p>
         )}
-        <p>الحالة: {status}</p>
+
+        {status === "expired" && (
+          <div className="error">انتهت صلاحية الكود (دقيقتين). اعمل كود جديد.</div>
+        )}
+        {status === "not_found" && <div className="error">الكود غير موجود.</div>}
+        {status === "confirmed" && <div className="success">تم التأكيد ✓ جاري التحويل...</div>}
+
+        <p style={{ margin: "10px 0" }}>
+          الحالة:{" "}
+          <span className={`badge ${status}`}>
+            {status === "pending" ? "في انتظار التأكيد" : status === "confirmed" ? "تم التأكيد" : "منتهي"}
+          </span>
+          {status === "pending" && (
+            <span className="muted"> · متبقّي {secondsLeft} ثانية</span>
+          )}
+        </p>
+
+        <div className="row" style={{ justifyContent: "center" }}>
+          {status === "pending" && (
+            <button className="btn secondary" onClick={simulateMobileConfirm} disabled={confirming}>
+              {confirming ? "جاري التأكيد..." : "تأكيد من الموبايل (تجريبي)"}
+            </button>
+          )}
+          <button className="btn" onClick={createQr} disabled={status === "pending" && secondsLeft > 0}>
+            إنشاء QR جديد
+          </button>
+        </div>
+
+        <p className="muted" style={{ marginTop: 12 }}>
+          للتجربة بـ curl: استخدم أمر <code>qr/confirm</code> من الـ README بـ Bearer token الموبايل.
+        </p>
       </div>
     </div>
   );
