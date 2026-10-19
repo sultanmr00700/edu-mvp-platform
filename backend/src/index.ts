@@ -1,84 +1,60 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
-import { PrismaClient } from "@prisma/client";
-import { randomUUID } from "crypto";
+import cookieParser from "cookie-parser";
+import multer from "multer";
+import authRoutes, { meRouter } from "./routes/auth";
+import booksRoutes, { UPLOAD_DIR } from "./routes/books";
 
-dotenv.config();
 const app = express();
+const PORT = Number(process.env.PORT || 4000);
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
+
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json());
-app.use(cors());
-const prisma = new PrismaClient();
-const PORT = process.env.PORT || 4000;
+app.use(cookieParser());
 
-app.get("/api/health", (req, res) => res.json({ ok: true }));
-
-// Simple register endpoint (no validation / hashing omitted for brevity)
-app.post("/api/auth/register", async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
-    if (!email || !password || !role) return res.status(400).json({ error: "missing" });
-    const user = await prisma.user.create({ data: { name, email, passwordHash: password, role } });
-    res.json({ user });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "server_error" });
-  }
+// Health check
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true });
 });
 
-// QR Login: create token and return payload to render as QR
-app.post("/api/auth/qr/create", async (req, res) => {
-  try {
-    const token = randomUUID();
-    const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
-    const qr = await prisma.qrSession.create({ data: { token, expiresAt } });
-    // payload encoded in QR: we can just send token string; frontend will encode as JSON if needed
-    res.json({ token: qr.token, expiresAt: qr.expiresAt });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "server_error" });
-  }
+// Routes
+app.use("/api/auth", authRoutes);
+app.use("/api", meRouter); // GET /api/me
+app.use("/api/books", booksRoutes);
+
+// Serve uploaded PDFs (the reader page embeds these URLs in an <iframe>)
+app.use("/uploads", express.static(UPLOAD_DIR));
+
+// Unknown API routes -> JSON 404
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "not_found" });
 });
 
-// Mobile app calls this to confirm the QR (must be authenticated on mobile side)
-app.post("/api/auth/qr/confirm", async (req, res) => {
-  try {
-    // In real app verify Authorization header token from mobile
-    const { token, mobileUserId } = req.body;
-    if (!token || !mobileUserId) return res.status(400).json({ error: "missing" });
-    const session = await prisma.qrSession.findUnique({ where: { token } });
-    if (!session) return res.status(404).json({ error: "not_found" });
-    if (session.used) return res.status(400).json({ error: "already_used" });
-    if (session.expiresAt < new Date()) return res.status(400).json({ error: "expired" });
-    // link session to user (mobileUserId should map to existing user id)
-    await prisma.qrSession.update({ where: { token }, data: { used: true, userId: mobileUserId } });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "server_error" });
-  }
-});
-
-// Web client polls this to see if QR was confirmed
-app.get("/api/auth/qr/status", async (req, res) => {
-  try {
-    const token = String(req.query.token || "");
-    if (!token) return res.status(400).json({ error: "missing" });
-    const session = await prisma.qrSession.findUnique({ where: { token } });
-    if (!session) return res.status(404).json({ status: "pending" });
-    if (session.used && session.userId) {
-      // create a session/token for web (for MVP just return user info)
-      const user = await prisma.user.findUnique({ where: { id: session.userId } });
-      return res.json({ status: "confirmed", user });
+// Error handler (multer + generic)
+app.use(
+  (
+    err: unknown,
+    _req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) => {
+    if (res.headersSent) {
+      return next(err);
     }
-    if (session.expiresAt < new Date()) return res.json({ status: "expired" });
-    res.json({ status: "pending" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "server_error" });
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: "upload_error", message: err.message });
+    }
+    if (err instanceof Error && err.message === "ONLY_PDF") {
+      return res.status(400).json({ error: "only_pdf_allowed" });
+    }
+    console.error("[server]", err);
+    return res.status(500).json({ error: "server_error" });
   }
-});
+);
 
 app.listen(PORT, () => {
-  console.log(`Server listening on ${PORT}`);
+  console.log(`API listening on http://localhost:${PORT}`);
+  console.log(`CORS origin: ${CORS_ORIGIN}`);
 });
