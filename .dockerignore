@@ -1,0 +1,13 @@
+# Repo-root .dockerignore (build context = repo root for both images)
+.git
+.github
+**/node_modules
+**/.next
+backend/dist
+backend/uploads/*
+!backend/uploads/.gitkeep
+frontend/.next
+*.log
+.env
+.env.*
+!.env.example
