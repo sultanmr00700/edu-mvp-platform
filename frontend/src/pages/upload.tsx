@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import Nav from "../components/Nav";
 import { api, Book } from "../lib/api";
 
 export default function UploadPage() {
@@ -40,38 +41,45 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: 520 }}>
-      <div className="card">
-        <h1>رفع كتاب PDF</h1>
-        {error && <div className="error">{error}</div>}
-        {created && (
-          <div className="success">
-            تم رفع «{created.title}» بنجاح ✓{" "}
-            <Link href={`/books/${created.id}`}>افتح الكتاب</Link>
-          </div>
-        )}
-        <form onSubmit={onSubmit}>
-          <div className="field">
-            <label>عنوان الكتاب (اختياري)</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثال: كتاب الرياضيات" />
-          </div>
-          <div className="field">
-            <label>ملف PDF</label>
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              required
-            />
-          </div>
-          <button className="btn" type="submit" disabled={loading}>
-            {loading ? "جاري الرفع..." : "ارفع الكتاب"}
-          </button>
-        </form>
-        <p className="muted" style={{ marginTop: 12 }}>
-          الحد الأقصى 25MB. هيتخزن محليًا في <code>backend/uploads</code> (لاحقًا S3/Supabase).
-        </p>
+    <>
+      <Nav />
+      <div className="container" style={{ maxWidth: 560 }}>
+        <div className="card fade-up">
+          <h1>⬆️ رفع كتاب PDF</h1>
+          {error && <div className="error">{error}</div>}
+          {created && (
+            <div className="success">
+              تم رفع «{created.title}» بنجاح ✓{" "}
+              <Link href={`/books/${created.id}`} style={{ fontWeight: 700 }}>افتح الكتاب ←</Link>
+            </div>
+          )}
+          <form onSubmit={onSubmit}>
+            <div className="field">
+              <label>عنوان الكتاب (اختياري)</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="مثال: كتاب الرياضيات"
+              />
+            </div>
+            <div className="field">
+              <label>ملف PDF</label>
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                required
+              />
+              <p className="file-hint">
+                {file ? `📎 المختار: ${file.name}` : "الحد الأقصى 25MB — هيتحفظ في backend/uploads"}
+              </p>
+            </div>
+            <button className="btn lg" type="submit" disabled={loading} style={{ width: "100%" }}>
+              {loading ? "جاري الرفع..." : "ارفع الكتاب"}
+            </button>
+          </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

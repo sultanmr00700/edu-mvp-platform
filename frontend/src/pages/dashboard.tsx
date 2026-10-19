@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { api, MOBILE_TOKEN_KEY, User } from "../lib/api";
+import Nav from "../components/Nav";
+import { api, User } from "../lib/api";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -15,49 +16,52 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  async function logout() {
-    try {
-      await api("/api/auth/logout", { method: "POST" });
-    } catch {
-      /* cookie might already be gone */
-    }
-    localStorage.removeItem(MOBILE_TOKEN_KEY);
-    router.replace("/login");
+  if (loading) {
+    return (
+      <>
+        <Nav />
+        <div className="container"><p className="muted">جاري التحميل...</p></div>
+      </>
+    );
   }
 
-  if (loading) return <div className="container"><p className="muted">جاري التحميل...</p></div>;
-
   return (
-    <div className="container">
-      <div className="card">
-        <h1>لوحة التحكم</h1>
-        {user && (
-          <>
-            <p>
-              <strong>{user.name || "بدون اسم"}</strong> — {user.email}
-            </p>
-            <p className="muted">الدور: {user.role}</p>
-          </>
-        )}
-      </div>
+    <>
+      <Nav />
+      <div className="container">
+        <div className="card fade-up">
+          <h1>لوحة التحكم 👋</h1>
+          {user && (
+            <>
+              <p style={{ fontWeight: 700 }}>{user.name || "بدون اسم"} — <span className="muted" style={{ fontWeight: 400 }}>{user.email}</span></p>
+              <p style={{ marginTop: 6 }}>
+                <span className="badge confirmed"><span className="dot" />الدور: {user.role}</span>
+              </p>
+            </>
+          )}
+        </div>
 
-      <div className="grid">
-        <div className="card book-card">
-          <h2>📚 المكتبة</h2>
-          <p className="muted">كل الكتب المرفوعة</p>
-          <Link className="btn" href="/library">افتح المكتبة</Link>
-        </div>
-        <div className="card book-card">
-          <h2>⬆️ رفع كتاب</h2>
-          <p className="muted">ارفع ملف PDF جديد</p>
-          <Link className="btn" href="/upload">ارفع الآن</Link>
-        </div>
-        <div className="card book-card">
-          <h2>🔐 تسجيل خروج</h2>
-          <p className="muted">إنهاء الجلسة الحالية</p>
-          <button className="btn secondary" onClick={logout}>خروج</button>
+        <div className="grid">
+          <div className="card book-card fade-up d1">
+            <div className="icon-tile tile-indigo">📚</div>
+            <Link href="/library">المكتبة</Link>
+            <p className="muted">كل الكتب المرفوعة — اقرأ أي كتاب في قارئ مدمج.</p>
+            <Link className="btn secondary" href="/library">افتح المكتبة</Link>
+          </div>
+          <div className="card book-card fade-up d2">
+            <div className="icon-tile tile-amber">⬆️</div>
+            <Link href="/upload">رفع كتاب</Link>
+            <p className="muted">ارفع ملف PDF جديد وأضفه للمكتبة فورًا.</p>
+            <Link className="btn" href="/upload">ارفع الآن</Link>
+          </div>
+          <div className="card book-card fade-up d3">
+            <div className="icon-tile tile-emerald">🔐</div>
+            <Link href="/login-qr">الدخول بـ QR</Link>
+            <p className="muted">جرّب تدفق مسح الـ QR من الموبايل.</p>
+            <Link className="btn secondary" href="/login-qr">جرّب الآن</Link>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

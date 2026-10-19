@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import Nav from "../../components/Nav";
 import { API_URL, api, Book } from "../../lib/api";
 
 export default function BookReaderPage() {
@@ -35,7 +36,7 @@ export default function BookReaderPage() {
       setProcessMsg(
         err instanceof Error && err.message === "queue_unavailable"
           ? "طابور المعالجة (Redis) غير متاح حاليًا"
-          : "بدأ المعالجة فشل"
+          : "ابدأ المعالجة فشل"
       );
     } finally {
       setProcessing(false);
@@ -44,43 +45,64 @@ export default function BookReaderPage() {
 
   if (error) {
     return (
-      <div className="container">
-        <div className="card">
-          <h1>مفيش كتاب</h1>
-          <p className="error">{error}</p>
-          <Link className="btn" href="/library">رجوع للمكتبة</Link>
+      <>
+        <Nav />
+        <div className="container" style={{ maxWidth: 560 }}>
+          <div className="card fade-up" style={{ textAlign: "center", padding: 44 }}>
+            <div className="icon-tile tile-rose" style={{ margin: "0 auto 14px" }}>😕</div>
+            <h1 style={{ fontSize: 22 }}>مفيش كتاب</h1>
+            <p className="error" style={{ display: "inline-block" }}>{error}</p>
+            <div><Link className="btn" href="/library">رجوع للمكتبة</Link></div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (!book) {
-    return <div className="container"><p className="muted">جاري التحميل...</p></div>;
+    return (
+      <>
+        <Nav />
+        <div className="container"><p className="muted">جاري التحميل...</p></div>
+      </>
+    );
   }
 
   return (
-    <div className="container" style={{ maxWidth: 1040 }}>
-      <div className="card">
-        <div className="row" style={{ justifyContent: "space-between" }}>
+    <>
+      <Nav />
+      <div className="container" style={{ maxWidth: 1060 }}>
+        <div className="card reader-toolbar fade-up">
           <div>
-            <h1 style={{ marginBottom: 4 }}>{book.title}</h1>
+            <h1>📖 {book.title}</h1>
             <span className="muted">أُضيف: {new Date(book.createdAt).toLocaleDateString("ar-EG")}</span>
           </div>
           <div className="row">
-            <button className="btn secondary" onClick={startProcessing} disabled={processing}>
-              {processing ? "جاري الإرسال..." : "ابدأ استخراج النص"}
+            <button
+              className="btn secondary"
+              onClick={startProcessing}
+              disabled={processing}
+              style={{ background: "rgba(255,255,255,.12)", color: "#fff", borderColor: "rgba(255,255,255,.25)" }}
+            >
+              {processing ? "جاري الإرسال..." : "🧠 ابدأ استخراج النص"}
             </button>
-            <Link className="btn secondary" href="/library">رجوع</Link>
+            <Link
+              className="btn secondary"
+              href="/library"
+              style={{ background: "rgba(255,255,255,.12)", color: "#fff", borderColor: "rgba(255,255,255,.25)" }}
+            >
+              رجوع
+            </Link>
           </div>
         </div>
-        {processMsg && <p className="muted" style={{ marginTop: 8 }}>{processMsg}</p>}
-      </div>
+        {processMsg && <p className="muted" style={{ margin: "-6px 4px 12px" }}>{processMsg}</p>}
 
-      <iframe
-        className="reader"
-        title={book.title}
-        src={`${API_URL}${book.pdfUrl}`}
-      />
-    </div>
+        <iframe
+          className="reader fade-up d1"
+          title={book.title}
+          src={`${API_URL}${book.pdfUrl}`}
+        />
+      </div>
+    </>
   );
 }

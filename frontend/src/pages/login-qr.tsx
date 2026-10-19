@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 import { useRouter } from "next/router";
+import Nav from "../components/Nav";
 import { api, MOBILE_TOKEN_KEY } from "../lib/api";
 
 type Status = "pending" | "confirmed" | "expired" | "not_found";
@@ -100,52 +101,57 @@ export default function LoginQrPage() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: 520 }}>
-      <div className="card" style={{ textAlign: "center" }}>
-        <h1>الدخول بـ QR</h1>
-        <p className="muted">
-          افتح التطبيق على الموبايل (المسجّل دخول)، امسح الكود، ووافق على الدخول.
-        </p>
+    <>
+      <Nav />
+      <div className="container" style={{ maxWidth: 560 }}>
+        <div className="card fade-up" style={{ textAlign: "center", padding: "34px 28px" }}>
+          <h1 style={{ marginBottom: 6 }}>الدخول بـ QR 🔐</h1>
+          <p className="muted" style={{ marginBottom: 4 }}>
+            افتح التطبيق على الموبايل المسجّل دخول، امسح الكود، ووافق على الدخول.
+          </p>
 
-        {error && <div className="error" style={{ textAlign: "right" }}>{error}</div>}
+          {error && <div className="error" style={{ textAlign: "right", marginTop: 14 }}>{error}</div>}
 
-        {token && status === "pending" && (
-          <div className="qr-box" style={{ margin: "12px auto" }}>
-            <QRCode value={token} size={200} />
-          </div>
-        )}
-
-        {status === "expired" && (
-          <div className="error">انتهت صلاحية الكود (دقيقتين). اعمل كود جديد.</div>
-        )}
-        {status === "not_found" && <div className="error">الكود غير موجود.</div>}
-        {status === "confirmed" && <div className="success">تم التأكيد ✓ جاري التحويل...</div>}
-
-        <p style={{ margin: "10px 0" }}>
-          الحالة:{" "}
-          <span className={`badge ${status}`}>
-            {status === "pending" ? "في انتظار التأكيد" : status === "confirmed" ? "تم التأكيد" : "منتهي"}
-          </span>
-          {status === "pending" && (
-            <span className="muted"> · متبقّي {secondsLeft} ثانية</span>
+          {token && status === "pending" && (
+            <div className="qr-wrap">
+              <div className="qr-box">
+                <QRCode value={token} size={208} />
+              </div>
+            </div>
           )}
-        </p>
 
-        <div className="row" style={{ justifyContent: "center" }}>
-          {status === "pending" && (
-            <button className="btn secondary" onClick={simulateMobileConfirm} disabled={confirming}>
-              {confirming ? "جاري التأكيد..." : "تأكيد من الموبايل (تجريبي)"}
+          {status === "expired" && (
+            <div className="error">انتهت صلاحية الكود (دقيقتين) ⏰ — اعمل كود جديد.</div>
+          )}
+          {status === "not_found" && <div className="error">الكود غير موجود.</div>}
+          {status === "confirmed" && <div className="success">تم التأكيد ✓ جاري التحويل للوحة التحكم...</div>}
+
+          <p style={{ margin: "14px 0" }}>
+            <span className={`badge ${status}`}>
+              <span className="dot" />
+              {status === "pending" ? "في انتظار التأكيد" : status === "confirmed" ? "تم التأكيد" : "منتهي الصلاحية"}
+            </span>
+            {status === "pending" && (
+              <span className="muted"> · متبقّي <span className="countdown">{secondsLeft}</span> ثانية</span>
+            )}
+          </p>
+
+          <div className="row" style={{ justifyContent: "center" }}>
+            {status === "pending" && (
+              <button className="btn secondary" onClick={simulateMobileConfirm} disabled={confirming}>
+                {confirming ? "جاري التأكيد..." : "📱 تأكيد من الموبايل (تجريبي)"}
+              </button>
+            )}
+            <button className="btn" onClick={createQr} disabled={status === "pending" && secondsLeft > 0}>
+              إنشاء QR جديد
             </button>
-          )}
-          <button className="btn" onClick={createQr} disabled={status === "pending" && secondsLeft > 0}>
-            إنشاء QR جديد
-          </button>
-        </div>
+          </div>
 
-        <p className="muted" style={{ marginTop: 12 }}>
-          للتجربة بـ curl: استخدم أمر <code>qr/confirm</code> من الـ README بـ Bearer token الموبايل.
-        </p>
+          <p className="muted" style={{ marginTop: 16 }}>
+            للتجربة بـ curl: استخدم أمر <code>qr/confirm</code> من الـ README بـ Bearer token الموبايل.
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
