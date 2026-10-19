@@ -7,6 +7,9 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  // Schema lives at the repo root (shared by local dev, CI and Docker).
+  // The client is generated into the backend's node_modules so `import { PrismaClient } from "@prisma/client"` works.
+  output   = "../backend/node_modules/.prisma/client"
 }
 
 enum UserRole {
@@ -120,6 +123,8 @@ model QuestionOption {
   optionText String
   isCorrect  Boolean @default(false)
   sequence   Int     @default(0)
+
+  selectedInAnswers AttemptAnswer[]
 }
 
 model Exam {
